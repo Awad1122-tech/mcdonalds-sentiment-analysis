@@ -1,6 +1,8 @@
 # McDonald’s Sentiment Analysis (Lexicon-Based NLP)
 
-This project performs lexicon-based sentiment analysis on McDonald’s customer reviews using three widely used sentiment lexicons: **Bing**, **AFINN**, and **NRC**.  
+🔗 **Live Report:** https://awad1122-tech.github.io/mcdonalds-sentiment-analysis/
+
+This project performs lexicon-based sentiment analysis on McDonald’s customer reviews using three widely used sentiment lexicons: Bing, AFINN, and NRC.  
 The goal is to compare how different lexicons capture sentiment polarity, intensity, and emotional content in real-world customer feedback.
 
 ---
