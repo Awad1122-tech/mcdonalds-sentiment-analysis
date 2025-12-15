@@ -1,0 +1,460 @@
+---
+title: "Sentiment Analysis of McDonald’s Customer Reviews"
+author: "Awad Pervez"
+date: "15 December 2025"
+output: html_document
+---
+
+# Project Overview
+
+This project explores customer sentiment in McDonald’s reviews using lexicon-based natural language processing techniques. Three sentiment lexicons Bing, AFINN, and NRC are applied to analyse sentiment polarity, intensity, and emotional content. The analysis demonstrates how different lexicons provide complementary insights into customer feedback.
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+
+libs <- c(
+  "tidyverse",    # data wrangling + plots
+  "tidytext",     # tokenization + stop words + sentiment workflows
+  "textdata",     # lexicons (bing, afinn, nrc)
+  "wordcloud",    # wordcloud
+  "RColorBrewer"  # palettes
+)
+
+for (pkg in libs) {
+  if (!require(pkg, character.only = TRUE)) {
+    install.packages(pkg)
+    library(pkg, character.only = TRUE)
+  } else {
+    library(pkg, character.only = TRUE)
+  }
+}
+```
+
+## 1.  LOAD DATA
+
+```{r load_data}
+file_path <- "Z:\\Data Science MSc\\Data_Mining\\week 02\\mcdonalds_sentiment_project\\data\\McDonald_s_Reviews.csv"
+
+mcd <- read.csv(file_path, stringsAsFactors = FALSE) %>% as_tibble()
+
+glimpse(mcd)
+
+
+```
+
+```{r}
+summary(mcd)
+```
+
+```{r}
+head(mcd$review, 5)
+```
+
+## 2. Sample reviews
+```{r step3_sampling}
+# Keeping only useful columns for sentiment analysis
+mcd_selected <- mcd %>%
+  select(
+    reviewer_id,
+    store_name,
+    category,
+    review,
+    rating,
+    review_time
+  ) %>%
+  filter(!is.na(review), review != "")     #   Remove empty reviews
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Choose sample size
+sample_size <- 500
+
+if (nrow(mcd_selected) > sample_size) {
+  mcd_sample <- mcd_selected %>%
+    slice_sample(n = sample_size) %>%
+    mutate(review_id = row_number())
+} else {
+  mcd_sample <- mcd_selected %>%
+    mutate(review_id = row_number())
+}
+
+nrow(mcd_sample)
+```
+```{r}
+head(mcd_sample$review, 3)
+```
+
+## 3.  Tokenise and clean
+
+
+```{r step4_tokenization}
+# Tokenize reviews into individual words
+mcd_tokens <- mcd_sample %>%
+  unnest_tokens(
+    output = word,      # column that will store each token
+    input  = review,    # text column
+    token  = "words",   # split into words
+    to_lower = TRUE     # convert to lowercase
+  )
+
+glimpse(mcd_tokens)
+
+```
+
+```{r}
+head(mcd_tokens$word, 20)
+
+```
+
+
+```{r}
+nrow(mcd_tokens)
+```
+
+
+```{r step5_cleaning}
+
+mcd_clean <- mcd_tokens %>%
+  anti_join(stop_words, by = "word") %>%          # remove stop words
+  mutate(word = gsub("[^a-zA-Z]", "", word)) %>%  # remove non-letters
+  filter(word != "")                              # remove empty tokens
+
+```
+
+
+
+```{r}
+
+nrow(mcd_tokens)     #  Total words BEFORE cleaning (after tokenization)
+
+nrow(mcd_clean)      # Total words AFTER cleaning (stop words + non-letters removed).
+```
+```{r}
+
+# 10751 − 3763 = 6988 words removed
+
+```
+
+```{r}
+# Stop words like the, and, is, to are very frequent but useless for sentiment.
+
+# Cleaning removes punctuation leftovers and junk tokens.
+
+# Lexicons work better on this reduced, meaningful vocabulary.
+
+# If we had removed only 10%, cleaning would be too weak.
+# If we removed 95%, cleaning would be too aggressive.
+# ~60–70% removal is right where you want to be.
+```
+
+
+## 4.  Bing sentiment
+
+
+```{r}
+
+# Load the Bing lexicon
+
+bing <- get_sentiments("bing")
+
+head(bing)
+
+
+
+
+
+
+```
+
+
+Here i will appply bing Lexicon to my cleaned tokens
+
+```{r}
+mcd_bing <- mcd_clean %>%
+  inner_join(bing, by = "word")
+
+```
+
+
+```{r}
+table(mcd_bing$sentiment)
+```
+
+```{r}
+head(mcd_bing, 10)
+
+```
+
+
+
+Summarise sentiment per review
+
+```{r}
+
+# Counts positive words per review
+
+# Counts negative words per review
+
+# Computes final sentiment score
+
+
+
+
+
+
+mcd_bing_scores <- mcd_bing %>%
+  group_by(review_id) %>%
+  summarise(
+    positive = sum(sentiment == "positive"),
+    negative = sum(sentiment == "negative"),
+    bing_score = positive - negative
+  ) %>%
+  ungroup()
+
+
+
+```
+
+
+
+```{r}
+# Inspect first few sentiment scores
+head(mcd_bing_scores, 10)
+
+# Overall distribution of sentiment scores
+summary(mcd_bing_scores$bing_score)
+```
+# DISTRIBUTION OF BING SENTIMENT SCORES (Histogram)
+
+
+```{r task6_histogram}
+library(ggplot2)
+
+ggplot(mcd_bing_scores, aes(x = bing_score)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+  labs(
+    title = "Distribution of Sentiment Scores (Bing Lexicon)",
+    x = "Bing Sentiment Score",
+    y = "Number of Reviews"
+  ) +
+  theme_minimal()
+```
+**Summary:**  
+The distribution shows that the most frequent Bing sentiment score is +1 (109 reviews), indicating that customer feedback is generally mildly positive. Mild negative sentiment (−1) is also common, suggesting frequent minor complaints. Neutral sentiment is less common, while extreme positive and negative scores occur rarely, showing that most reviews express mild rather than strong emotion.
+
+
+
+# # Positive vs Negative Word Counts (Bar Chart)
+
+```{r task6_pos_neg_counts}
+mcd_bing %>%
+  count(sentiment) %>%
+  ggplot(aes(x = sentiment, y = n, fill = sentiment)) +
+  geom_col() +
+  labs(
+    title = "Total Positive vs Negative Words (Bing Lexicon)",
+    x = "Sentiment Type",
+    y = "Word Count"
+  ) +
+  theme_minimal()
+```
+
+# Sentiment Score vs Star Rating (Boxplot)
+
+
+```{r task6_sentiment_vs_rating}
+mcd_bing_scores %>%
+  left_join(mcd_sample, by = "review_id") %>%
+  ggplot(aes(x = factor(rating), y = bing_score)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(
+    title = "Bing Sentiment Score vs Customer Rating",
+    x = "Star Rating",
+    y = "Bing Sentiment Score"
+  ) +
+  theme_minimal()
+```
+**Summary:**  
+The boxplot shows a clear positive relationship between star ratings and Bing sentiment scores. Lower-rated reviews (1–2 stars) have predominantly negative sentiment, while higher-rated reviews (4–5 stars) show positive median sentiment scores. Reviews with mid-range ratings (3 stars) exhibit mixed sentiment, indicating balanced positive and negative language. Overall, the results suggest that textual sentiment aligns well with customer star ratings.
+
+
+
+
+## 5. AFINN sentiment
+
+
+
+```{r afinn_load}
+
+# Load AFINN lexicon
+
+afinn <- get_sentiments("afinn")
+head(afinn)
+```
+
+
+```{r afinn_join}
+# Apply AFINN to tokens
+mcd_afinn <- mcd_clean %>%
+  inner_join(afinn, by = "word")     #  Keeps only words that exist in the AFINN lexicon
+
+
+summary(mcd_afinn$value)
+
+```
+First, the review text is tokenised and cleaned. Each word is then matched against the AFINN lexicon, which assigns a numeric sentiment value to sentiment-bearing words. The summary shows the distribution of these word-level sentiment scores across the dataset.
+
+
+
+#Compute "Review level" AFFIN SCORE
+
+```{r afinn_scores}
+mcd_afinn_scores <- mcd_afinn %>%
+  group_by(review_id) %>%
+  summarise(
+    afinn_score = sum(value)
+  ) %>%
+  ungroup()
+
+```
+
+
+
+```{r}
+head(mcd_afinn_scores)
+```
+
+
+```{r}
+summary(mcd_afinn_scores$afinn_score)
+```
+
+**Summary:** 
+
+At the **review level**, AFINN sentiment scores range from −12 to +15, indicating the presence of both strongly negative and strongly positive reviews. The median score of +1 and mean score of approximately +0.42 suggest that overall customer sentiment is slightly positive. The interquartile range from −2 to +3 shows that the middle 50% of reviews express mild sentiment rather than extreme opinions.
+
+
+#  AFINN Sentiment Score Histogram:
+
+```{r afinn_histogram}
+ggplot(mcd_afinn_scores, aes(x = afinn_score)) +
+  geom_histogram(
+    binwidth = 2,
+    fill = "darkorange",
+    color = "black"
+  ) +
+  labs(
+    title = "Distribution of Sentiment Scores (AFINN Lexicon)",
+    x = "AFINN Sentiment Score",
+    y = "Number of Reviews"
+  ) +
+  theme_minimal()
+```
+
+**Summary:**  
+At the review level, AFINN sentiment scores are concentrated around small positive and negative values, with most reviews clustered near zero. The distribution shows a slight positive bias, consistent with the median score of +1 and mean of approximately +0.42. Compared to Bing, the wider range of scores reflects AFINN’s ability to capture sentiment intensity, while extreme positive and negative reviews remain relatively rare.
+
+
+## 6. NRC emotions lexicon
+
+
+```{r nrc_load}
+nrc <- get_sentiments("nrc")
+head(nrc)
+```
+
+#  Joining NRC with cleaned tokens
+
+
+```{r nrc_join}
+mcd_nrc <- mcd_clean %>%
+  inner_join(nrc, by = "word")
+
+```
+
+
+```{r}
+head(mcd_nrc)
+```
+
+# Counting emotions across the dataset
+
+```{r nrc_counts}
+nrc_counts <- mcd_nrc %>%
+  count(sentiment, sort = TRUE)
+
+nrc_counts
+```
+
+
+```{r nrc_barplot}
+ggplot(nrc_counts, aes(x = reorder(sentiment, n), y = n)) +
+  geom_col(fill = "purple") +
+  coord_flip() +
+  labs(
+    title = "Emotion Distribution Using NRC Lexicon",
+    x = "Emotion",
+    y = "Word Count"
+  ) +
+  theme_minimal()
+
+```
+**Conclusion (NRC Lexicon):**  
+The NRC emotion analysis reveals that customer reviews contain a diverse range of emotional expressions. Positive-related emotions such as *positive*, *trust*, and *joy* appear most frequently, indicating generally favourable customer engagement with McDonald’s. However, negative emotions including *anger*, *fear*, *disgust*, and *sadness* are also present, reflecting dissatisfaction in a subset of reviews. Compared to Bing and AFINN, which focus on sentiment polarity and intensity, the NRC lexicon provides a richer emotional perspective by highlighting the specific emotions underlying customer feedback. Together, the results suggest that while overall sentiment is slightly positive, customer experiences are emotionally varied.
+
+
+
+
+
+## 7. Overall conclusion
+
+This project applied lexicon-based sentiment analysis to McDonald’s customer reviews using three different approaches: Bing, AFINN, and NRC. Each lexicon provided a distinct perspective on customer feedback. The Bing lexicon captured sentiment polarity and showed that reviews tend to be slightly positive overall. The AFINN lexicon extended this analysis by incorporating sentiment intensity, revealing a wider range of review-level sentiment scores while still indicating a mild positive bias across the dataset. The NRC lexicon further enriched the analysis by identifying the emotional composition of reviews, highlighting frequent expressions of trust, joy, and anticipation alongside the presence of negative emotions such as anger and sadness.
+
+Across all three methods, the results were broadly consistent, suggesting that customer sentiment toward McDonald’s is generally mildly positive, with most reviews expressing moderate rather than extreme opinions. However, the NRC analysis demonstrated that customer experiences are emotionally diverse, even when overall sentiment appears positive. Together, these findings show that combining multiple lexicons provides a more comprehensive understanding of customer feedback, capturing sentiment direction, intensity, and underlying emotional context.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
